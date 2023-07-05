@@ -27,6 +27,11 @@ ApplicationSolar::ApplicationSolar(std::string const& resource_path)
  ,star_model{}
  //Assignment 4
  ,skybox_object{}
+ //Assignment 5
+ ,framebuffer_obj{}
+ ,m_width{initial_resolution.x}
+ ,m_height{initial_resolution.y}
+ //
  ,m_view_transform{glm::translate(glm::fmat4{}, glm::fvec3{0.0f, 0.0f, 4.0f})}, m_view_projection{utils::calculate_projection_matrix(initial_aspect_ratio)}
 {
   initializeSceneGraph();
@@ -37,6 +42,8 @@ ApplicationSolar::ApplicationSolar(std::string const& resource_path)
   //Assignment 4
   initializeTextures();
   initializeSkybox();
+  //Assignment 5
+  initializeFramebuffer(m_width, m_height);
 }
 
 ApplicationSolar::~ApplicationSolar() {
@@ -48,6 +55,10 @@ ApplicationSolar::~ApplicationSolar() {
   glDeleteBuffers(1, &star_model.element_BO);
   glDeleteVertexArrays(1, &star_model.vertex_AO);
 
+  //Assignment 4
+  glDeleteBuffers(1,&skybox_object.vertex_BO);
+  glDeleteBuffers(1,&skybox_object.element_BO);
+  glDeleteVertexArrays(1,&skybox_object.vertex_AO);
 }
 
 
@@ -67,6 +78,10 @@ void ApplicationSolar::uploadView() {
     glUseProgram(m_shaders.at("light").handle);
     glUniformMatrix4fv(m_shaders.at("light").u_locs.at("ViewMatrix"),
                        1, GL_FALSE, glm::value_ptr(view_matrix));
+
+  //Assignment 5
+    glUseProgram(m_shaders.at("framebuffer").handle);
+    glUniform2f(m_shaders.at("framebuffer").u_locs.at("textureSize"), m_width, m_height);
 }
 
 void ApplicationSolar::uploadProjection() {
@@ -85,6 +100,10 @@ void ApplicationSolar::uploadProjection() {
     glUseProgram(m_shaders.at("star").handle);
     glUniformMatrix4fv(m_shaders.at("star").u_locs.at("ProjectionMatrix"),
                        1, GL_FALSE, glm::value_ptr(m_view_projection));
+
+    //Assignment 4
+    //glUseProgram(m_shaders.at("skybox").handle);
+    //glUniformMatrix4fv(m_shaders.at("skybox").u_locs.at("ProjectionMatrix"),1,GL_FALSE,glm::value_ptr(m_view_projection));
 }
 
 // update uniform locations
@@ -192,6 +211,17 @@ void ApplicationSolar::initializeShaderPrograms() {
     m_shaders.at("light").u_locs["ViewMatrix"] = -1;
     m_shaders.at("light").u_locs["ProjectionMatrix"] = -1;
 
+    //Assignment 4
+    //m_shaders.emplace("skybox", shader_program{{{GL_VERTEX_SHADER,m_resource_path + "shaders/skybox.vert"}, {GL_FRAGMENT_SHADER, m_resource_path + "shaders/light.frag"}}});
+    m_shaders.at("planet").u_locs["pass_TexCoord"] = -1;
+    m_shaders.at("planet").u_locs["diffuseTexture"] = -1;
+    //m_shaders.at("skybox").u_locs["skybox_Position"]=-1;
+    //m_shaders.at("skybox").u_locs["skybox_Texture"]=-1;
+
+    //Assignment 5
+    m_shaders.emplace("framebuffer", shader_program{{{GL_VERTEX_SHADER,m_resource_path + "shaders/framebuffer.vert"},
+                                               {GL_FRAGMENT_SHADER, m_resource_path + "shaders/framebuffer.frag"}}});
+    m_shaders.at("framebuffer").u_locs["framebufferTexture"] = -1;
 }
 
 // load models
@@ -266,25 +296,6 @@ void ApplicationSolar::keyCallback(int key, int action, int mods) {
 
 //handle delta mouse movement input
 void ApplicationSolar::mouseCallback(double pos_x, double pos_y) {
-  // mouse handling
-  //imagine dividing window with coordinate system in the middle -> 4 cases
-  /*
-    if (pos_x > 0 && pos_y > 0){
-        m_view_transform = glm::translate(m_view_transform, glm::fvec3{0.01f, 0.01f,0.0f});
-        uploadView();
-    }
-    if (pos_x < 0 && pos_y > 0){
-        m_view_transform = glm::translate(m_view_transform, glm::fvec3{-0.01f, 0.01f,0.0f});
-        uploadView();
-    }
-    if (pos_y < 0 && pos_x > 0){
-        m_view_transform = glm::translate(m_view_transform, glm::fvec3{0.01f, -0.01f,0.0f});
-        uploadView();
-    }
-    if (pos_y < 0 && pos_x < 0){
-        m_view_transform = glm::translate(m_view_transform, glm::fvec3{-0.01f, -0.01f,0.0f});
-        uploadView();
-    }*/
     if (pos_x > 0){
         m_view_transform = glm::translate(m_view_transform, glm::fvec3{-0.01f, 0.0f,0.0f});
         uploadView();
@@ -423,7 +434,16 @@ void ApplicationSolar::render() const {
 
     renderPlanets();
     renderStars();
-    //renderSkybox();
+
+    //Assignment 5
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer_obj.handle);
+    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glUseProgram(m_shaders.at("framebuffer").handle);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, framebuffer_obj.texture_Obj.handle);
+    glUniform1i(glGetUniformLocation(m_shaders.at("framebuffer").handle, "screentexture"), 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void ApplicationSolar::renderPlanets() const {
@@ -487,7 +507,7 @@ void ApplicationSolar::renderPlanets() const {
     float time = 10.0f;
 
     //Assignment 4
-    int sampler_location = glGetUniformLocation(m_shaders.at("planet").handle, "diffuseTexture");
+    GLint diffuseTextureLoc = glGetUniformLocation(m_shaders.at("planet").handle, "diffuseTexture");
     //
 
     for ( const std::shared_ptr<Node>& i : planets) {
@@ -526,8 +546,12 @@ void ApplicationSolar::renderPlanets() const {
         //Assignment 4
         GLuint textureID = i->getTexInt();
         glActiveTexture(GL_TEXTURE0);
+        //Bind the 2D texture with the specified texture ID
         glBindTexture(GL_TEXTURE_2D,textureID);
-        glUniform1i(sampler_location,0);
+        //Set the uniform variable 'diffuseTextureLoc' to 0, indicating that the active texture unit is 0
+        glUniform1i(diffuseTextureLoc,0);
+        //
+
         glUniform3f(planetColorLoc, i->getPlanetColor().x, i->getPlanetColor().y,i->getPlanetColor().z);
     }
 
@@ -551,10 +575,10 @@ void ApplicationSolar::renderSun() const {
 //Assignment 4
 void ApplicationSolar::initializeTextures() {
 
-    //making new list for only planets
+    //Making new list for only planets
     std::vector<std::shared_ptr<Node>> planets;
 
-    // pushing planet nodes into new list
+    //Pushing planet nodes into new list
     planets.push_back(sceneGraph_.getRoot().getChildren("Mercury"));
     planets.push_back(sceneGraph_.getRoot().getChildren("Venus"));
     planets.push_back(sceneGraph_.getRoot().getChildren("Earth"));
@@ -583,14 +607,16 @@ void ApplicationSolar::initializeTextures() {
         glGenTextures(1,&m_texture);
         glBindTexture(GL_TEXTURE_2D, m_texture);
 
-        //Set texture parameters
+        //Setting texture parameters
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        //Generate Texture
-        glTexImage2D(GL_TEXTURE_2D,0,planet_data.channels,(GLsizei)planet_data.width,(GLsizei)planet_data.height,0,planet_data.channels,planet_data.channel_type,planet_data.ptr());
-        //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, planet_data.width, planet_data.height, 0, GL_RGB, GL_UNSIGNED_BYTE, planet_data.ptr());
+        //Generating Texture
+        //glTexImage2D(GL_TEXTURE_2D,0,planet_data.channels,(GLsizei)planet_data.width,(GLsizei)planet_data.height,0,planet_data.channels,planet_data.channel_type,planet_data.ptr());
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, planet_data.width, planet_data.height, 0, GL_RGB, GL_UNSIGNED_BYTE, planet_data.ptr());
+
+        //Storing the identifier of the texture object in the corresponding planet node
         i->setTexInt(m_texture);
     }
 
@@ -600,40 +626,51 @@ void ApplicationSolar::initializeTextures() {
 void ApplicationSolar::initializeSkybox() {
     float skyboxVertices[] = {
             // Vertex coordinates
-            -1.0f,  1.0f, -1.0f, //Top left back
-            1.0f,  1.0f, -1.0f, //Top right back
-            -1.0f, -1.0f, -1.0f, //Bottom left back
-            1.0f, -1.0f, -1.0f, //Bottom right back
-            -1.0f,  1.0f,  1.0f, //Top left front
-            1.0f,  1.0f,  1.0f, //Top right front
-            -1.0f, -1.0f,  1.0f, //Bottom left front
-            1.0f, -1.0f,  1.0f  //Bottom right front
+            -1.0f,  1.0f, -1.0f, // 左上后
+            1.0f,  1.0f, -1.0f, // 右上后
+            -1.0f, -1.0f, -1.0f, // 左下后
+            1.0f, -1.0f, -1.0f, // 右下后
+            -1.0f,  1.0f,  1.0f, // 左上前
+            1.0f,  1.0f,  1.0f, // 右上前
+            -1.0f, -1.0f,  1.0f, // 左下前
+            1.0f, -1.0f,  1.0f  // 右下前
     };
 
 }
 
-//Assignment 4
-void ApplicationSolar::renderSkybox() const{
-    //Disable writing to the depth buffer
-    glDepthMask(GL_FALSE);
-    //Use the skybox shader program
-    glUseProgram(m_shaders.at("skybox").handle);
-    //Set the uniform for the skybox texture
-    GLint skyboxLoc = glGetUniformLocation(m_shaders.at("skybox").handle, "skybox_Texture");
-    glUniform1i(skyboxLoc, m_skyboxTexture);
-    //Activate texture unit 11
-    glActiveTexture(GL_TEXTURE10);
-    //Bind the skybox texture to the active texture unit
-    glBindTexture(GL_TEXTURE_CUBE_MAP, m_texture);
-    //Bind the vertex array object for the skybox
-    glBindVertexArray(skybox_object.vertex_AO);
-    //Draw the skybox
-    glDrawArrays(skybox_object.draw_mode, 0, skybox_object.num_elements);
-    //Enable writing to the depth buffer again
-    glDepthMask(GL_TRUE);
+//Assignment 5
+float m_width;
+float m_height;
+//Assignment 5
+void ApplicationSolar::initializeFramebuffer(unsigned int width, unsigned int height) {
+    //Define framebuffer
+    glGenFramebuffers(1, &framebuffer_obj.handle);
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer_obj.handle);
+    //Create a texture as color attachment
+    texture_object texture_obj;
+    glActiveTexture(GL_TEXTURE0);
+    glGenTextures(1, &texture_obj.handle);
+    glBindTexture(GL_TEXTURE_2D, texture_obj.handle);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); //GL_NEAREST
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    //Bind the texture object to the color attachment point of the framebuffer object
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture_obj.handle, 0);
+    //Set new width and height for framebuffer texture
+    framebuffer_obj.texture_Obj = texture_obj;
+    //Create a renderbuffer as depth attachment
+    unsigned int renderbuffer_obj;
+    glGenRenderbuffers(1, &renderbuffer_obj);
+    glBindRenderbuffer(GL_RENDERBUFFER, renderbuffer_obj);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, width, height);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, framebuffer_obj.renderbuffer_handle);
+    framebuffer_obj.renderbuffer_handle = renderbuffer_obj;
+    glBindRenderbuffer(GL_RENDERBUFFER, 0);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
 }
-
-
 // exe entry point
 int main(int argc, char* argv[]) {
   Application::run<ApplicationSolar>(argc, argv, 3, 2);

@@ -36,6 +36,9 @@ class ApplicationSolar : public Application {
   //Assignment 4
   unsigned int m_texture;
   unsigned int m_skyboxTexture;
+  //Assignment 5
+  unsigned m_width;
+  unsigned m_height;
 
  protected:
   void initializeShaderPrograms();
@@ -53,18 +56,21 @@ class ApplicationSolar : public Application {
   //Assignment 4
   void initializeTextures();
   void initializeSkybox();
-  void renderSkybox() const;
+  void renderSkybox();
+  //Assignment 5
+  void initializeFramebuffer(unsigned width, unsigned height);
 
   // cpu representation of model
   model_object planet_object;
   model_object star_model;
+  //Assignment 4
+  model_object skybox_object;
+  //Assignment 5
+  framebuffer_object framebuffer_obj;
   // camera transform matrix
   glm::fmat4 m_view_transform;
   // camera projection matrix
   glm::fmat4 m_view_projection;
-
-  //Assignment 4
-  model_object skybox_object;
 };
 
 #endif
